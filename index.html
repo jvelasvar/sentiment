@@ -185,23 +185,7 @@ const EMOJIS = { positivo:'😊', negativo:'😔', neutro:'😐', mixto:'😅', 
 // ─── STORAGE BACKEND ───────────────────────────────────────────────
 // Uses window.storage if available (Claude artifacts), otherwise
 // falls back to a simple in-memory store for standalone hosting.
-const store = (() => {
-  if (typeof window !== 'undefined' && window.storage) return window.storage;
-  const mem = {};
-  return {
-    get: async (k) => mem[k] ? { value: mem[k] } : null,
-    set: async (k, v) => { mem[k] = v; return { value: v }; },
-    delete: async (k) => { delete mem[k]; return { deleted: true }; },
-  };
-})();
-
-// ─── FIREBASE FALLBACK (cuando se hostea fuera de Claude) ──────────
-// Para sincronización real entre dispositivos en GitHub Pages,
-// reemplaza este bloque con tu propia integración (Firebase, Supabase, etc.)
-// o usa un servicio como jsonbin.io con tu API key.
-// Sin backend externo, el dashboard del presentador y los participantes
-// deben estar en el mismo navegador/pestaña para ver los datos.
-// ──────────────────────────────────────────────────────────────────
+const PROXY = 'https://sentiment-beta.vercel.app/api/analyze';
 
 let currentSession = '';
 let currentMode = '';
@@ -245,12 +229,11 @@ async function analyzePhrase() {
   document.getElementById('loadingDiv').classList.remove('hidden');
 
   try {
-    const res = await fetch('https://sentiment-beta.vercel.app/api/analyze', {
+    const res = await fetch(`${PROXY}?action=analyze&session=${currentSession}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ phrase })
     });
-
     const analysis = await res.json();
     if (analysis.error) throw new Error(analysis.error);
 
@@ -290,19 +273,12 @@ function showResult(phrase, a) {
 }
 
 async function saveToSession(phrase, analysis) {
-  const key = `session-${currentSession}`;
-  let entries = [];
-  try {
-    const existing = await store.get(key, true);
-    if (existing) entries = JSON.parse(existing.value);
-  } catch(e) {}
-  entries.push({ phrase, analysis, ts: Date.now() });
-  await store.set(key, JSON.stringify(entries), true);
+  // ya guardado por el proxy, no hace falta aquí
 }
 
 async function clearSession() {
   if (!confirm('¿Limpiar todos los datos de esta sesión?')) return;
-  try { await store.delete(`session-${currentSession}`, true); } catch(e) {}
+  await fetch(`https://sentiment-beta.vercel.app/api/analyze?action=clear&session=${currentSession}`, { method: 'POST' });
   renderDashboard([]);
 }
 
@@ -314,8 +290,9 @@ function startPolling() {
 
 async function loadDashboard() {
   try {
-    const res = await store.get(`session-${currentSession}`, true);
-    renderDashboard(res ? JSON.parse(res.value) : []);
+    const res = await fetch(`https://sentiment-beta.vercel.app/api/analyze?action=read&session=${currentSession}`);
+    const entries = await res.json();
+    renderDashboard(Array.isArray(entries) ? entries : []);
   } catch(e) { renderDashboard([]); }
 }
 
