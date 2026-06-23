@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IA & Sentimientos en Vivo</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --pos: #22c55e; --neg: #ef4444; --neu: #6b7280;
+    --mix: #f59e0b; --sur: #a855f7; --bg: #0f172a;
+    --card: #1e293b; --border: #334155; --text: #f1f5f9;
+    --sub: #94a3b8;
+  }
+  body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  #landing { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 2rem; gap: 1.5rem; }
+  .logo { font-size: 2.5rem; font-weight: 800; background: linear-gradient(135deg, #60a5fa, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .subtitle { color: var(--sub); font-size: 1rem; text-align: center; }
+  .mode-cards { display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; width: 100%; max-width: 500px; }
+  .mode-card { flex: 1; min-width: 200px; background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 1.5rem; cursor: pointer; transition: all .2s; text-align: center; }
+  .mode-card:hover { border-color: #60a5fa; transform: translateY(-2px); box-shadow: 0 8px 24px rgba(96,165,250,.2); }
+  .mode-icon { font-size: 2.5rem; margin-bottom: .5rem; }
+  .mode-title { font-weight: 700; font-size: 1.1rem; margin-bottom: .3rem; }
+  .mode-desc { color: var(--sub); font-size: .85rem; }
+  .session-input { width: 100%; max-width: 320px; }
+  .session-input input { width: 100%; padding: .75rem 1rem; background: var(--card); border: 1px solid var(--border); border-radius: 10px; color: var(--text); font-size: 1.1rem; text-align: center; letter-spacing: 2px; text-transform: uppercase; outline: none; }
+  .session-input input:focus { border-color: #60a5fa; }
+  .btn { padding: .75rem 2rem; border-radius: 10px; border: none; font-size: 1rem; font-weight: 600; cursor: pointer; transition: all .2s; }
+  .btn-primary { background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: #fff; }
+  .btn-primary:hover { opacity: .9; transform: translateY(-1px); }
+  .btn-sm { padding: .5rem 1.2rem; font-size: .875rem; }
+
+  #participant { display: none; flex-direction: column; min-height: 100vh; padding: 1.5rem; max-width: 480px; margin: 0 auto; gap: 1rem; }
+  .header { display: flex; align-items: center; justify-content: space-between; }
+  .session-badge { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: .3rem .8rem; font-size: .8rem; color: var(--sub); }
+  .session-badge span { color: #60a5fa; font-weight: 700; }
+  textarea { width: 100%; background: var(--card); border: 1px solid var(--border); border-radius: 12px; color: var(--text); padding: 1rem; font-size: 1rem; resize: none; outline: none; font-family: inherit; }
+  textarea:focus { border-color: #60a5fa; }
+  .char-count { text-align: right; font-size: .75rem; color: var(--sub); }
+  .result-card { background: var(--card); border-radius: 16px; padding: 1.5rem; display: none; flex-direction: column; gap: 1rem; }
+  .sentiment-pill { display: inline-flex; align-items: center; gap: .5rem; padding: .4rem 1rem; border-radius: 999px; font-weight: 700; font-size: 1rem; }
+  .confidence-bar { background: #334155; border-radius: 999px; height: 8px; overflow: hidden; }
+  .confidence-fill { height: 100%; border-radius: 999px; transition: width .5s; }
+  .field-row { display: flex; justify-content: space-between; align-items: center; font-size: .9rem; }
+  .field-label { color: var(--sub); }
+  .keywords { display: flex; flex-wrap: wrap; gap: .4rem; }
+  .kw { background: #1e3a5f; color: #93c5fd; border-radius: 6px; padding: .2rem .6rem; font-size: .8rem; }
+  .reason-box { background: #0f172a; border-radius: 10px; padding: 1rem; font-size: .875rem; color: var(--sub); line-height: 1.5; }
+  .loading { text-align: center; padding: 2rem; color: var(--sub); }
+  .spinner { width: 32px; height: 32px; border: 3px solid #334155; border-top-color: #60a5fa; border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 1rem; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .success-msg { background: rgba(34,197,94,.1); border: 1px solid rgba(34,197,94,.3); border-radius: 10px; padding: .75rem 1rem; font-size: .875rem; color: #86efac; display: none; }
+
+  #presenter { display: none; flex-direction: column; min-height: 100vh; padding: 1.5rem; max-width: 1200px; margin: 0 auto; gap: 1.5rem; }
+  .pres-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+  .pres-title { font-size: 1.5rem; font-weight: 800; }
+  .live-badge { display: inline-flex; align-items: center; gap: .5rem; background: rgba(239,68,68,.15); border: 1px solid rgba(239,68,68,.4); border-radius: 999px; padding: .3rem .9rem; font-size: .8rem; font-weight: 700; color: #fca5a5; }
+  .live-dot { width: 8px; height: 8px; background: #ef4444; border-radius: 50%; animation: pulse 1.5s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+  .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; }
+  .metric-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 1.2rem; text-align: center; }
+  .metric-val { font-size: 2rem; font-weight: 800; }
+  .metric-label { font-size: .8rem; color: var(--sub); margin-top: .2rem; }
+  .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  @media(max-width:640px) { .charts-grid { grid-template-columns: 1fr; } }
+  .chart-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 1.2rem; }
+  .chart-title { font-size: .9rem; font-weight: 600; margin-bottom: 1rem; color: var(--sub); text-transform: uppercase; letter-spacing: 1px; }
+  .bar-row { display: flex; align-items: center; gap: .75rem; margin-bottom: .6rem; font-size: .85rem; }
+  .bar-label { width: 70px; text-align: right; color: var(--sub); font-size: .8rem; }
+  .bar-track { flex: 1; background: #1e293b; border-radius: 999px; height: 20px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 999px; transition: width .6s ease; display: flex; align-items: center; justify-content: flex-end; padding-right: .4rem; font-size: .7rem; font-weight: 700; color: #fff; min-width: 20px; }
+  .bar-count { width: 24px; text-align: left; color: var(--sub); font-size: .8rem; }
+  .wordcloud { display: flex; flex-wrap: wrap; gap: .5rem; padding: .5rem 0; min-height: 80px; }
+  .wc-word { border-radius: 6px; padding: .25rem .6rem; font-weight: 600; cursor: default; transition: transform .2s; }
+  .wc-word:hover { transform: scale(1.1); }
+  .feed-list { display: flex; flex-direction: column; gap: .75rem; max-height: 400px; overflow-y: auto; }
+  .feed-item { background: #0f172a; border: 1px solid var(--border); border-radius: 12px; padding: 1rem; display: flex; gap: 1rem; align-items: flex-start; }
+  .feed-pill { padding: .2rem .7rem; border-radius: 999px; font-size: .75rem; font-weight: 700; white-space: nowrap; }
+  .feed-text { font-size: .875rem; line-height: 1.4; color: var(--text); }
+  .feed-meta { font-size: .75rem; color: var(--sub); margin-top: .3rem; }
+  .feed-emo { font-size: .75rem; color: #a78bfa; }
+  .empty-state { text-align: center; padding: 3rem; color: var(--sub); }
+  .empty-icon { font-size: 3rem; margin-bottom: 1rem; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- LANDING -->
+<div id="landing">
+  <div class="logo">🧠 SentimentLive</div>
+  <div class="subtitle">Análisis de sentimientos en tiempo real para charlas sobre IA</div>
+  <div class="session-input">
+    <input type="text" id="sessionCode" placeholder="CÓDIGO DE SESIÓN" maxlength="10" value="IA2025">
+  </div>
+  <div class="mode-cards">
+    <div class="mode-card" onclick="enterMode('participant')">
+      <div class="mode-icon">📱</div>
+      <div class="mode-title">Participante</div>
+      <div class="mode-desc">Envía tu frase y recibe análisis de IA al instante</div>
+    </div>
+    <div class="mode-card" onclick="enterMode('presenter')">
+      <div class="mode-icon">📊</div>
+      <div class="mode-title">Presentador</div>
+      <div class="mode-desc">Dashboard en vivo con todas las respuestas del grupo</div>
+    </div>
+  </div>
+</div>
+
+<!-- PARTICIPANT -->
+<div id="participant">
+  <div class="header">
+    <div class="logo" style="font-size:1.4rem">🧠 SentimentLive</div>
+    <div class="session-badge">Sesión: <span id="p-session-label"></span></div>
+  </div>
+  <p style="color:var(--sub);font-size:.9rem">Escribe una frase sobre IA, trabajo o productividad y la IA analizará tu sentimiento.</p>
+  <textarea id="phraseInput" rows="4" placeholder="Escribe aquí tu frase..." maxlength="400" oninput="updateChar()"></textarea>
+  <div class="char-count"><span id="charCount">0</span>/400</div>
+  <button class="btn btn-primary" onclick="analyzePhrase()" id="analyzeBtn">✨ Analizar sentimiento</button>
+  <div id="loadingDiv" class="loading hidden"><div class="spinner"></div>Analizando con IA...</div>
+  <div id="successMsg" class="success-msg">✅ Tu respuesta fue enviada al dashboard del presentador.</div>
+  <div id="resultCard" class="result-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem">
+      <div id="sentimentPill" class="sentiment-pill"></div>
+      <div style="font-size:.85rem;color:var(--sub)">Confianza: <strong id="confVal"></strong>%</div>
+    </div>
+    <div class="confidence-bar"><div id="confBar" class="confidence-fill"></div></div>
+    <div class="field-row"><span class="field-label">Emoción</span><span id="emoVal" style="font-size:.95rem"></span></div>
+    <div class="field-row"><span class="field-label">Intensidad</span><span id="intVal" style="font-size:.95rem"></span></div>
+    <div class="field-label" style="font-size:.8rem;margin-top:.3rem">Palabras clave</div>
+    <div id="keywords" class="keywords"></div>
+    <div class="field-label" style="font-size:.8rem">Análisis</div>
+    <div id="reasonBox" class="reason-box"></div>
+  </div>
+</div>
+
+<!-- PRESENTER -->
+<div id="presenter">
+  <div class="pres-header">
+    <div>
+      <div class="pres-title">📊 Dashboard en Vivo</div>
+      <div style="color:var(--sub);font-size:.85rem;margin-top:.2rem">Sesión: <strong id="pres-session-label" style="color:#60a5fa"></strong></div>
+    </div>
+    <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap">
+      <div class="live-badge"><div class="live-dot"></div>EN VIVO</div>
+      <button class="btn btn-primary btn-sm" onclick="clearSession()">🗑 Limpiar sesión</button>
+      <button class="btn btn-sm" style="background:var(--card);border:1px solid var(--border)" onclick="goHome()">← Salir</button>
+    </div>
+  </div>
+  <div class="metrics-grid">
+    <div class="metric-card"><div class="metric-val" id="m-total">0</div><div class="metric-label">Respuestas totales</div></div>
+    <div class="metric-card"><div class="metric-val" style="color:var(--pos)" id="m-pos">0%</div><div class="metric-label">Positivos</div></div>
+    <div class="metric-card"><div class="metric-val" style="color:var(--neg)" id="m-neg">0%</div><div class="metric-label">Negativos</div></div>
+    <div class="metric-card"><div class="metric-val" id="m-conf">—</div><div class="metric-label">Confianza media</div></div>
+  </div>
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-title">Distribución de sentimientos</div>
+      <div id="sentBars"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">☁️ Nube de palabras clave</div>
+      <div id="wordCloud" class="wordcloud"></div>
+    </div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">📡 Feed en vivo</div>
+    <div id="feedList" class="feed-list">
+      <div class="empty-state"><div class="empty-icon">💬</div>Esperando respuestas de participantes...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const COLORS = {
+  positivo: { bg:'rgba(34,197,94,.15)', border:'rgba(34,197,94,.5)', text:'#86efac', bar:'#22c55e' },
+  negativo: { bg:'rgba(239,68,68,.15)', border:'rgba(239,68,68,.5)', text:'#fca5a5', bar:'#ef4444' },
+  neutro:   { bg:'rgba(107,114,128,.15)', border:'rgba(107,114,128,.5)', text:'#d1d5db', bar:'#6b7280' },
+  mixto:    { bg:'rgba(245,158,11,.15)', border:'rgba(245,158,11,.5)', text:'#fcd34d', bar:'#f59e0b' },
+  sorpresa: { bg:'rgba(168,85,247,.15)', border:'rgba(168,85,247,.5)', text:'#d8b4fe', bar:'#a855f7' },
+};
+const EMOJIS = { positivo:'😊', negativo:'😔', neutro:'😐', mixto:'😅', sorpresa:'😲' };
+
+// ─── STORAGE BACKEND ───────────────────────────────────────────────
+// Uses window.storage if available (Claude artifacts), otherwise
+// falls back to a simple in-memory store for standalone hosting.
+const store = (() => {
+  if (typeof window !== 'undefined' && window.storage) return window.storage;
+  const mem = {};
+  return {
+    get: async (k) => mem[k] ? { value: mem[k] } : null,
+    set: async (k, v) => { mem[k] = v; return { value: v }; },
+    delete: async (k) => { delete mem[k]; return { deleted: true }; },
+  };
+})();
+
+// ─── FIREBASE FALLBACK (cuando se hostea fuera de Claude) ──────────
+// Para sincronización real entre dispositivos en GitHub Pages,
+// reemplaza este bloque con tu propia integración (Firebase, Supabase, etc.)
+// o usa un servicio como jsonbin.io con tu API key.
+// Sin backend externo, el dashboard del presentador y los participantes
+// deben estar en el mismo navegador/pestaña para ver los datos.
+// ──────────────────────────────────────────────────────────────────
+
+let currentSession = '';
+let currentMode = '';
+let pollInterval = null;
+
+function goHome() {
+  clearInterval(pollInterval);
+  document.getElementById('participant').style.display = 'none';
+  document.getElementById('presenter').style.display = 'none';
+  document.getElementById('landing').style.display = 'flex';
+}
+
+function enterMode(mode) {
+  const code = document.getElementById('sessionCode').value.trim().toUpperCase();
+  if (!code) { alert('Ingresa un código de sesión'); return; }
+
+  currentSession = code;
+  currentMode = mode;
+  document.getElementById('landing').style.display = 'none';
+  if (mode === 'participant') {
+    document.getElementById('participant').style.display = 'flex';
+    document.getElementById('p-session-label').textContent = code;
+  } else {
+    document.getElementById('presenter').style.display = 'flex';
+    document.getElementById('pres-session-label').textContent = code;
+    startPolling();
+  }
+}
+
+function updateChar() {
+  document.getElementById('charCount').textContent = document.getElementById('phraseInput').value.length;
+}
+
+async function analyzePhrase() {
+  const phrase = document.getElementById('phraseInput').value.trim();
+  if (!phrase) { alert('Escribe una frase primero'); return; }
+
+  document.getElementById('analyzeBtn').disabled = true;
+  document.getElementById('resultCard').style.display = 'none';
+  document.getElementById('successMsg').style.display = 'none';
+  document.getElementById('loadingDiv').classList.remove('hidden');
+
+  try {
+    const res = await fetch('https://sentiment-beta.vercel.app/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phrase })
+    });
+
+    const analysis = await res.json();
+    if (analysis.error) throw new Error(analysis.error);
+
+    showResult(phrase, analysis);
+    await saveToSession(phrase, analysis);
+    document.getElementById('successMsg').style.display = 'block';
+  } catch (e) {
+    alert('Error al analizar: ' + e.message);
+  } finally {
+    document.getElementById('loadingDiv').classList.add('hidden');
+    document.getElementById('analyzeBtn').disabled = false;
+  }
+}
+
+function showResult(phrase, a) {
+  const s = (a.sentimiento || 'neutro').toLowerCase();
+  const c = COLORS[s] || COLORS.neutro;
+  const emoji = EMOJIS[s] || '❓';
+
+  const pill = document.getElementById('sentimentPill');
+  pill.textContent = `${emoji} ${s.charAt(0).toUpperCase()+s.slice(1)}`;
+  pill.style.cssText = `background:${c.bg};border:1px solid ${c.border};color:${c.text}`;
+
+  document.getElementById('confVal').textContent = a.confianza;
+  const bar = document.getElementById('confBar');
+  bar.style.width = a.confianza + '%';
+  bar.style.background = c.bar;
+
+  document.getElementById('emoVal').textContent = a.emocion || '—';
+  document.getElementById('intVal').textContent = a.intensidad || '—';
+
+  const kws = document.getElementById('keywords');
+  kws.innerHTML = (a.palabras_clave || []).map(w => `<span class="kw">${w}</span>`).join('');
+
+  document.getElementById('reasonBox').textContent = a.razon || '—';
+  document.getElementById('resultCard').style.display = 'flex';
+}
+
+async function saveToSession(phrase, analysis) {
+  const key = `session-${currentSession}`;
+  let entries = [];
+  try {
+    const existing = await store.get(key, true);
+    if (existing) entries = JSON.parse(existing.value);
+  } catch(e) {}
+  entries.push({ phrase, analysis, ts: Date.now() });
+  await store.set(key, JSON.stringify(entries), true);
+}
+
+async function clearSession() {
+  if (!confirm('¿Limpiar todos los datos de esta sesión?')) return;
+  try { await store.delete(`session-${currentSession}`, true); } catch(e) {}
+  renderDashboard([]);
+}
+
+function startPolling() {
+  renderDashboard([]);
+  loadDashboard();
+  pollInterval = setInterval(loadDashboard, 3000);
+}
+
+async function loadDashboard() {
+  try {
+    const res = await store.get(`session-${currentSession}`, true);
+    renderDashboard(res ? JSON.parse(res.value) : []);
+  } catch(e) { renderDashboard([]); }
+}
+
+function renderDashboard(entries) {
+  const total = entries.length;
+  document.getElementById('m-total').textContent = total;
+
+  if (!total) {
+    document.getElementById('m-pos').textContent = '0%';
+    document.getElementById('m-neg').textContent = '0%';
+    document.getElementById('m-conf').textContent = '—';
+    renderBars({}, 0);
+    renderWordCloud({});
+    document.getElementById('feedList').innerHTML = `<div class="empty-state"><div class="empty-icon">💬</div>Esperando respuestas de participantes...</div>`;
+    return;
+  }
+
+  const counts = {};
+  let totalConf = 0;
+  const kwFreq = {};
+
+  entries.forEach(e => {
+    const s = (e.analysis?.sentimiento || 'neutro').toLowerCase();
+    counts[s] = (counts[s] || 0) + 1;
+    totalConf += (e.analysis?.confianza || 0);
+    (e.analysis?.palabras_clave || []).forEach(w => {
+      const wl = w.toLowerCase();
+      kwFreq[wl] = (kwFreq[wl] || 0) + 1;
+    });
+  });
+
+  document.getElementById('m-pos').textContent = Math.round(((counts.positivo||0)/total)*100) + '%';
+  document.getElementById('m-neg').textContent = Math.round(((counts.negativo||0)/total)*100) + '%';
+  document.getElementById('m-conf').textContent = Math.round(totalConf/total) + '%';
+
+  renderBars(counts, total);
+  renderWordCloud(kwFreq);
+  renderFeed(entries);
+}
+
+function renderBars(counts, total) {
+  const order = ['positivo','negativo','neutro','mixto','sorpresa'];
+  document.getElementById('sentBars').innerHTML = order.map(s => {
+    const n = counts[s] || 0;
+    const pct = total ? Math.round((n/total)*100) : 0;
+    const c = COLORS[s];
+    return `<div class="bar-row">
+      <div class="bar-label">${EMOJIS[s]} ${s}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${c.bar}">${pct>8?pct+'%':''}</div></div>
+      <div class="bar-count">${n}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderWordCloud(freq) {
+  const container = document.getElementById('wordCloud');
+  const sorted = Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,30);
+  if (!sorted.length) { container.innerHTML = '<span style="color:var(--sub);font-size:.85rem">Sin palabras clave aún</span>'; return; }
+  const max = sorted[0][1];
+  const palette = ['#60a5fa','#a78bfa','#34d399','#f472b6','#fbbf24','#4ade80','#fb7185','#818cf8'];
+  container.innerHTML = sorted.map(([w,n],i) => {
+    const size = (0.8 + (n/max)*1.4).toFixed(2);
+    const col = palette[i % palette.length];
+    return `<span class="wc-word" style="font-size:${size}rem;background:${col}22;color:${col};border:1px solid ${col}44">${w}</span>`;
+  }).join('');
+}
+
+function renderFeed(entries) {
+  const container = document.getElementById('feedList');
+  container.innerHTML = [...entries].reverse().map(e => {
+    const s = (e.analysis?.sentimiento||'neutro').toLowerCase();
+    const c = COLORS[s];
+    const time = new Date(e.ts).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
+    return `<div class="feed-item">
+      <span class="feed-pill" style="background:${c.bg};border:1px solid ${c.border};color:${c.text}">${EMOJIS[s]} ${s}</span>
+      <div>
+        <div class="feed-text">${escapeHtml(e.phrase)}</div>
+        <div class="feed-meta">${time} · <span class="feed-emo">${e.analysis?.emocion||''}</span> · Confianza: ${e.analysis?.confianza||0}%</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function escapeHtml(t) {
+  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>
