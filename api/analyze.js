@@ -35,22 +35,38 @@ export default async function handler(req, res) {
     const { phrase } = req.body;
     if (!phrase) return res.status(400).json({ error: 'Falta phrase' });
 
-    const geminiRes = await fetch(
+      const geminiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: `Eres un analizador de sentimientos. Analiza el siguiente texto y responde ÚNICAMENTE con un objeto JSON válido, sin backticks ni texto extra:
-{"sentimiento":"positivo|negativo|neutro|mixto|sorpresa","confianza":0-100,"emocion":"emoción en español","intensidad":"baja|media|alta","palabras_clave":["array"],"razon":"explicación breve en español"}
-Texto: ${phrase}` }] }],
-          generationConfig: { temperature: 0.3, maxOutputTokens: 500 }
+          contents: [{ parts: [{ text: `Eres un API que solo devuelve JSON. Sin texto adicional, sin markdown, sin backticks, sin explicaciones. Solo el objeto JSON.
+
+Analiza el sentimiento de este texto: "${phrase}"
+
+Devuelve exactamente este formato:
+{"sentimiento":"positivo","confianza":85,"emocion":"alegría","intensidad":"alta","palabras_clave":["palabra1","palabra2"],"razon":"explicación breve"}
+
+Valores válidos para sentimiento: positivo, negativo, neutro, mixto, sorpresa
+Valores válidos para intensidad: baja, media, alta
+confianza: número entre 0 y 100` }] }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 300, responseMimeType: 'application/json' }
         })
       }
     );
     const geminiData = await geminiRes.json();
+    console.log('Gemini raw:', JSON.stringify(geminiData));
     const raw = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-    const analysis = JSON.parse(raw.replace(/```json|```/g, '').trim());
+    const clean = raw.replace(/```json|```/g, '').trim();
+    console.log('Clean JSON:', clean);
+    let analysis;
+    try {
+      analysis = JSON.parse(clean);
+    } catch(parseErr) {
+      console.error('Parse error:', parseErr, 'Raw was:', clean);
+      return res.status(500).json({ error: 'Error al parsear respuesta de Gemini', raw: clean });
+    }
 
     await dbRequest('entries', 'POST', { session, phrase, analysis, ts: Date.now() });
     return res.status(200).json(analysis);
@@ -64,3 +80,5 @@ Texto: ${phrase}` }] }],
 
   res.status(400).json({ error: 'Acción no válida' });
 }
+
+export const config = { api: { bodyParser: true } };
