@@ -35,37 +35,43 @@ export default async function handler(req, res) {
     const { phrase } = req.body;
     if (!phrase) return res.status(400).json({ error: 'Falta phrase' });
 
-      const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: `Eres un API que solo devuelve JSON. Sin texto adicional, sin markdown, sin backticks, sin explicaciones. Solo el objeto JSON.
+      const geminiRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'HTTP-Referer': 'https://jvelasvar.github.io/sentiment'
+      },
+      body: JSON.stringify({
+        model: 'mistralai/mistral-7b-instruct:free',
+        messages: [{
+          role: 'user',
+          content: `Eres un API que solo devuelve JSON. Sin texto adicional, sin markdown, sin backticks.
 
 Analiza el sentimiento de este texto: "${phrase}"
 
-Devuelve exactamente este formato:
+Devuelve exactamente este formato JSON:
 {"sentimiento":"positivo","confianza":85,"emocion":"alegría","intensidad":"alta","palabras_clave":["palabra1","palabra2"],"razon":"explicación breve"}
 
-Valores válidos para sentimiento: positivo, negativo, neutro, mixto, sorpresa
-Valores válidos para intensidad: baja, media, alta
-confianza: número entre 0 y 100` }] }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 300, responseMimeType: 'application/json' }
-        })
-      }
-    );
+Valores para sentimiento: positivo, negativo, neutro, mixto, sorpresa
+Valores para intensidad: baja, media, alta
+confianza: número 0-100`
+        }],
+        temperature: 0.1,
+        max_tokens: 300
+      })
+    });
     const geminiData = await geminiRes.json();
-    console.log('Gemini raw:', JSON.stringify(geminiData));
-    const raw = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    console.log('OpenRouter raw:', JSON.stringify(geminiData));
+    const raw = geminiData.choices?.[0]?.message?.content || '{}';
     const clean = raw.replace(/```json|```/g, '').trim();
     console.log('Clean JSON:', clean);
     let analysis;
     try {
       analysis = JSON.parse(clean);
     } catch(parseErr) {
-      console.error('Parse error:', parseErr, 'Raw was:', clean);
-      return res.status(500).json({ error: 'Error al parsear respuesta de Gemini', raw: clean });
+      console.error('Parse error:', parseErr, 'Raw:', clean);
+      return res.status(500).json({ error: 'Error al parsear respuesta', raw: clean });
     }
 
     await dbRequest('entries', 'POST', { session, phrase, analysis, ts: Date.now() });
