@@ -22,7 +22,9 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const { action, session } = req.query;
+  const url = new URL(req.url, `https://${req.headers.host}`);
+  const action = url.searchParams.get('action') || req.query?.action;
+  const session = url.searchParams.get('session') || req.query?.session;
 
   // GET — leer sesión (presentador)
   if (req.method === 'GET' && action === 'read') {
@@ -35,43 +37,34 @@ export default async function handler(req, res) {
     const { phrase } = req.body;
     if (!phrase) return res.status(400).json({ error: 'Falta phrase' });
 
-      const geminiRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        'HTTP-Referer': 'https://jvelasvar.github.io/sentiment'
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'mistralai/mistral-7b-instruct:free',
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 300,
+        system: 'Eres un analizador de sentimientos. Responde ÚNICAMENTE con JSON puro, sin backticks ni texto extra.',
         messages: [{
           role: 'user',
-          content: `Eres un API que solo devuelve JSON. Sin texto adicional, sin markdown, sin backticks.
-
-Analiza el sentimiento de este texto: "${phrase}"
-
-Devuelve exactamente este formato JSON:
-{"sentimiento":"positivo","confianza":85,"emocion":"alegría","intensidad":"alta","palabras_clave":["palabra1","palabra2"],"razon":"explicación breve"}
-
-Valores para sentimiento: positivo, negativo, neutro, mixto, sorpresa
-Valores para intensidad: baja, media, alta
-confianza: número 0-100`
-        }],
-        temperature: 0.1,
-        max_tokens: 300
+          content: `Analiza el sentimiento de: "${phrase}"\n\nDevuelve exactamente:\n{"sentimiento":"positivo|negativo|neutro|mixto|sorpresa","confianza":0-100,"emocion":"emoción en español","intensidad":"baja|media|alta","palabras_clave":["array"],"razon":"explicación breve"}`
+        }]
       })
     });
-    const geminiData = await geminiRes.json();
-    console.log('OpenRouter raw:', JSON.stringify(geminiData));
-    const raw = geminiData.choices?.[0]?.message?.content || '{}';
+    const aiData = await aiRes.json();
+    console.log('Anthropic raw:', JSON.stringify(aiData));
+    const raw = aiData.content?.[0]?.text || '{}';
     const clean = raw.replace(/```json|```/g, '').trim();
     console.log('Clean JSON:', clean);
     let analysis;
     try {
       analysis = JSON.parse(clean);
-    } catch(parseErr) {
-      console.error('Parse error:', parseErr, 'Raw:', clean);
-      return res.status(500).json({ error: 'Error al parsear respuesta', raw: clean });
+    } catch(e) {
+      console.error('Parse error:', e, 'Raw:', clean);
+      return res.status(500).json({ error: 'Error al parsear', raw: clean });
     }
 
     await dbRequest('entries', 'POST', { session, phrase, analysis, ts: Date.now() });
